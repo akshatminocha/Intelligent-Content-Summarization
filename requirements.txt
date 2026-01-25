@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+streamlit
+google-genai
+google-adk
+pydantic-settings
+litellm
+yt-dlp
+youtube-transcript-api
+duckduckgo-search
+trafilatura
+sqlmodel
+pydantic
+python-dotenv
+beautifulsoup4
+requests
