@@ -4,11 +4,18 @@ from typing import List, Optional
 import logging
 
 from shared.schemas import ProcessingRequest, FullProcessResponse, ContentType, ContentItem
+from backend.agents.notification import NotificationAgent
 
 class ProcessItemRequest(BaseModel):
     item: ContentItem
     user_interests: str
     manual_text: Optional[str] = None
+
+class EmailRequest(BaseModel):
+    to_email: str
+    subject: str
+    content: str
+
 from backend.agents.discovery import SourceDiscoveryAgent
 from backend.agents.extraction import ContentExtractionAgent
 from backend.agents.analysis import AnalysisAgent
@@ -23,6 +30,8 @@ app = FastAPI(title="Content Monitoring Agent")
 discovery_agent = SourceDiscoveryAgent()
 extraction_agent = ContentExtractionAgent()
 analysis_agent = AnalysisAgent()
+notification_agent = NotificationAgent()
+
 
 @app.get("/")
 def health():
@@ -67,3 +76,15 @@ def process_single_item(request: ProcessItemRequest):
         analysis=analysis,
         summary=summary
     )
+
+@app.post("/send-email")
+def send_email(request: EmailRequest):
+    """
+    Send an email via Mailtrap.
+    """
+    success = notification_agent.send_email(request.to_email, request.subject, request.content)
+    if success:
+        return {"status": "sent"}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to send email")
+

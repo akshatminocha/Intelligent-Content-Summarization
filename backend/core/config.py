@@ -3,6 +3,8 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     GEMINI_API_KEY: str = ""
+    MAIL_TRAP_USERNAME: str = ""
+    MAIL_TRAP_PASSWORD: str = ""
     DATABASE_URL: str = "sqlite:///./app.db"
     
     class Config:

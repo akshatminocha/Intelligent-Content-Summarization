@@ -32,6 +32,11 @@ if st.sidebar.button("Discover Content"):
         st.sidebar.error("Please enter a URL or Topic.")
     else:
         with st.spinner("Discovering..."):
+            # Clear previous analysis results
+            keys_to_clear = [k for k in st.session_state.keys() if k.startswith('result_') or k.startswith('email_open_')]
+            for k in keys_to_clear:
+                del st.session_state[k]
+                
             try:
                 # Handle Manual "Discovery" (Fake it)
                 if source_type == "manual":
@@ -137,6 +142,43 @@ Why This Matters:
 Source: {summary.get('source_url')}
                         """, language="text")
                         st.caption("Copy above for LinkedIn")
+                        
+                        # --- Email Workflow ---
+                        st.markdown("---")
+                        st.subheader("📧 Email Notification")
+                        if st.button("Approve & Prepare Email", key=f"approve_{i}"):
+                            st.session_state[f"email_open_{i}"] = True
+                            
+                        if st.session_state.get(f"email_open_{i}", False):
+                            st.write("Review and send email:")
+                            with st.form(key=f"email_form_{i}"):
+                                recipient_email = st.text_input("Recipient Email", placeholder="manager@company.com")
+                                email_subject = st.text_input("Subject", value=f"Executive Summary: {summary.get('title')}")
+                                
+                                # Default Content
+                                default_body = f"""Hi Team,\n\nHere is the executive summary for: {summary.get('title')}\n\nEXECUTIVE SUMMARY\n{summary.get('summary_text')}\n\nKEY TAKEAWAYS\n{chr(10).join(['- ' + p for p in summary.get('key_takeaways', [])])}\n\nWHY THIS MATTERS\n{summary.get('why_it_matters')}\n\nSource: {summary.get('source_url')}\n\nBest,\nIntelligent Agent"""
+                                
+                                # We won't show the full body editor to keep it simple as requested ("intelligently create on its own"), 
+                                # but we pass it generated.
+                                
+                                submit_email = st.form_submit_button("🚀 Send Email")
+                                
+                                if submit_email:
+                                    if not recipient_email:
+                                        st.error("Please enter a recipient email.")
+                                    else:
+                                        with st.spinner("Sending..."):
+                                            try:
+                                                payload = {"to_email": recipient_email, "subject": email_subject, "content": default_body}
+                                                r = requests.post(f"{API_URL}/send-email", json=payload)
+                                                if r.status_code == 200:
+                                                    st.success("Email Sent Successfully!")
+                                                    # Setup state to hide form? or keep it open? logic:
+                                                    st.session_state[f"email_open_{i}"] = False # Close on success
+                                                else:
+                                                    st.error(f"Failed to send: {r.text}")
+                                            except Exception as e:
+                                                st.error(f"Error: {e}")
                 else:
                     st.warning(f"❌ Not Relevant (Score: {analysis.get('relevance_score')})")
                     st.caption(f"Reasoning: {analysis.get('reasoning')}")
