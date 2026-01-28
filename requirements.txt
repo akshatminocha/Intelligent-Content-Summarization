@@ -7,7 +7,7 @@ pydantic-settings
 litellm
 yt-dlp
 youtube-transcript-api
-duckduckgo-search
+ddgs
 trafilatura
 sqlmodel
 pydantic
