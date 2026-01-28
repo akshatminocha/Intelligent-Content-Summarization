@@ -4,7 +4,7 @@ from typing import List, Optional
 import logging
 
 from shared.schemas import ProcessingRequest, FullProcessResponse, ContentType, ContentItem
-from backend.agents.notification import NotificationAgent
+
 
 class ProcessItemRequest(BaseModel):
     item: ContentItem
@@ -16,9 +16,10 @@ class EmailRequest(BaseModel):
     subject: str
     content: str
 
-from backend.agents.discovery import SourceDiscoveryAgent
-from backend.agents.extraction import ContentExtractionAgent
-from backend.agents.analysis import AnalysisAgent
+from backend.core.config import settings
+from backend.tools.discovery import discover_youtube, discover_reddit
+from backend.tools.extraction import extract_content
+from backend.tools.notification import send_email_tool
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -26,11 +27,15 @@ logger = logging.getLogger("api")
 
 app = FastAPI(title="Content Monitoring Agent")
 
-# Initialize Agents
-discovery_agent = SourceDiscoveryAgent()
-extraction_agent = ContentExtractionAgent()
+# Helper: Analysis using ADK Agent (Simulated usage of the model/agent)
+# Since setting up a full Runner loop for a sync API is overkill, we might use the underlying model or 
+# a helper from `backend.agents.adk` if we exposed one.
+# For now, let's stick to the tools for Discovery/Extraction and 
+# use the `backend.agents.analysis.AnalysisAgent` (which uses google-genai) for the LLM part,
+# effectively treating it as a specialized ADK agent component.
+from backend.agents.analysis import AnalysisAgent
 analysis_agent = AnalysisAgent()
-notification_agent = NotificationAgent()
+
 
 
 @app.get("/")
@@ -39,9 +44,21 @@ def health():
 
 @app.post("/discover", response_model=List[ContentItem])
 def discover_content(request: ProcessingRequest):
-    """Discover content based on source type (Channel URL or Topic)."""
-    items = discovery_agent.discover(request.source_type, request.url)
-    return items
+    """Discover content using Discovery Tools."""
+    import json
+    if request.source_type == ContentType.YOUTUBE:
+        data_str = discover_youtube(request.url)
+    elif request.source_type == ContentType.REDDIT:
+        data_str = discover_reddit(request.url.replace("site:reddit.com", "").strip())
+    else:
+        return []
+        
+    try:
+        data = json.loads(data_str)
+        # Convert dicts to Pydantic models
+        return [ContentItem(**item) for item in data]
+    except:
+        return []
 
 @app.post("/process-item", response_model=FullProcessResponse)
 def process_single_item(request: ProcessItemRequest):
@@ -53,12 +70,12 @@ def process_single_item(request: ProcessItemRequest):
     user_interests = request.user_interests
     logger.info(f"Processing item: {item.title}")
     
-    # 1. Extract (or use Manual)
+    # 1. Extract
     text = ""
     if request.manual_text:
         text = request.manual_text
     else:
-        text = extraction_agent.extract(item.url, item.source_type, item.source_id)
+        text = extract_content(item.url)
         
     if not text:
         return FullProcessResponse(item=item, analysis={"is_relevant": False, "relevance_score": 0, "reasoning": "Extraction Failed"}, error="Could not extract content")
@@ -80,11 +97,11 @@ def process_single_item(request: ProcessItemRequest):
 @app.post("/send-email")
 def send_email(request: EmailRequest):
     """
-    Send an email via Mailtrap.
+    Send an email via Notification Tool.
     """
-    success = notification_agent.send_email(request.to_email, request.subject, request.content)
-    if success:
+    result = send_email_tool(request.to_email, request.subject, request.content)
+    if result == "Success":
         return {"status": "sent"}
     else:
-        raise HTTPException(status_code=500, detail="Failed to send email")
+        raise HTTPException(status_code=500, detail=result)
 
